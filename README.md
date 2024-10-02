@@ -121,6 +121,86 @@ class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
 
 ```
 
+#### Using ViewSet
+
+```python
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from .models import Article
+from .serializers import ArticleSerializer
+
+class ArticleViewSet(viewsets.ModelViewSet):
+    """
+    A ViewSet for viewing and editing articles.
+    """
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+```
+
+### Using ApiView
+
+```python
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import Article
+from .serializers import ArticleSerializer
+
+class ArticleList(APIView):
+    """
+    Handles GET and POST requests for listing articles and creating new ones.
+    """
+
+    def get(self, request):
+        articles = Article.objects.all()
+        serializer = ArticleSerializer(articles, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = ArticleSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ArticleDetail(APIView):
+    """
+    Handles GET, PUT, DELETE requests for a single article instance.
+    """
+
+    def get(self, request, pk):
+        article = get_object_or_404(Article, pk=pk)
+        serializer = ArticleSerializer(article)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        article = get_object_or_404(Article, pk=pk)
+        serializer = ArticleSerializer(article, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        article = get_object_or_404(Article, pk=pk)
+        article.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+```
+
 ### Add API URLs
 Define API routes in ```api/urls.py```:
 ```python
@@ -134,7 +214,7 @@ urlpatterns = [
     path('products/<int:pk>/', ProductDetail.as_view(), name='product-detail'),
 ]
 ```
-### Set Up Swagger and Redoc URLs for OpenAPI
+### Include App urls in the Project
 
 Configure Swagger and Redoc URLs in your main ```myapi/urls.py``` file:
 
@@ -143,50 +223,20 @@ Configure Swagger and Redoc URLs in your main ```myapi/urls.py``` file:
 
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework import permissions
-from drf_yasg.views import get_schema_view
-from drf_yasg import openapi
-
-schema_view = get_schema_view(
-    openapi.Info(
-        title="My API Documentation",
-        default_version="v1",
-        description="API for managing products",
-        terms_of_service="https://www.google.com/policies/terms/",
-        contact=openapi.Contact(email="contact@myapi.local"),
-        license=openapi.License(name="BSD License"),
-    ),
-    public=True,
-    permission_classes=(permissions.AllowAny,),
-)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),  # Include the API URLs
-
-    # Swagger UI:
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-
-    # Redoc UI:
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-
-    # OpenAPI schema in JSON format:
-    path('openapi/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
 ]
 
 ```
 
-### Test the API and Swagger UI
+### Test the API Endpoints
 Run the development server:
 ```
 python manage.py runserver
 ```
-### You can now access:
-- Swagger UI at http://localhost:8000/swagger/
-- Redoc UI at http://localhost:8000/redoc/
-- OpenAPI JSON schema at http://localhost:8000/openapi/
 
-# Testing the API Endpoints
 1. Create a Product (POST request):
     - URL: http://localhost:8000/api/products/
     - Example body:
@@ -218,10 +268,59 @@ python manage.py runserver
     ```
 5. Delete a Product (DELETE request):
     - URL: http://localhost:8000/api/products/1/
+  
 
-# 
 
-#### You can now interact with your API and explore your documentation via the Swagger and Redoc interfaces!
+
+## Configuration for OpenAPI Documentation with Django RestFramework:
+Update your ```settings.py``` to include drf_spectacular in the INSTALLED_APPS and configure the settings for drf-spectacular.
+
+```python
+# Add DRF configuration to use Spectacular as the default schema generator
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'My API Documentation',
+    'DESCRIPTION': 'API for managing products',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
+```
+
+In your main ```myapi/urls.py``` file, configure the schema view and the documentation URLs using drf-spectacular.
+
+```python
+# myapi/urls.py
+
+from django.contrib import admin
+from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+
+
+urlpatterns = [
+
+    # OpenAPI schema
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+
+    # Optional Swagger UI:
+    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+
+    # Optional Redoc UI:
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+]
+
+```
+
+### Test the API and Access Documentation
+Run the development server:
+```python
+python manage.py runserver
+```
+- Swagger UI: Go to http://localhost:8000/api/schema/swagger-ui/ to access the Swagger documentation.
+- Redoc UI: Go to http://localhost:8000/api/schema/redoc/ to access the Redoc documentation.
+- OpenAPI JSON Schema: Visit http://localhost:8000/api/schema/ to see the raw OpenAPI schema in JSON format.
 
 #
  <h1 style="text-align:center";>THANKS FOR ATTENDING THIS SESSION</h1>
