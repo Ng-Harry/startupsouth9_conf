@@ -16,8 +16,8 @@ Create a folder to house your project, go to your terminal and write the followi
 
 
 ```r3
-mkdir startupsouth
-cd startupsouth
+mkdir startupsouth9
+cd startupsouth9
 
 # open the directory with your code editor
 ```
